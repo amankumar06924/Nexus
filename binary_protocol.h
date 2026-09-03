@@ -17,13 +17,12 @@ uint8_t version;
 uint8_t type;
 uint16_t payload_length;
 uint64_t sequence;
-}
+};
 
 struct message{
-struct message_header header;
+struct Message_header header;
 uint8_t payload[4096];
-}
-y
+};
 size_t serialize(const struct message*,uint8_t* output_buffer,size_t buffer_capacity);
 bool deserialize(const uint8_t* input_buffer,size_t input_length,struct message*);
 bool validate(const struct message*);

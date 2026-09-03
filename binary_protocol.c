@@ -1,6 +1,7 @@
 #include<stdint.h>
 #include<stdio.h>
 #include"binary_protocol.h"
+#include<string.h>
 
 size_t serialize(const struct message *message,uint8_t *output_buffer,size_t buffer_capacity){
 if(buffer_capacity==0){return 0;}
@@ -16,20 +17,33 @@ for(int i=4;i<12;i++){
 output_buffer[i] = ((message->header.sequence)>>(8*k))&0xFF;
 k--;
 }
-return 12;
+size_t required = 12 + message->header.payload_length;
+if(buffer_capacity<required) return 0;
+memcpy(output_buffer+12,message->payload,message->header.payload_length);
+return 12 + message->header.payload_length;
 }
 
-bool deserialize(const uint8_t *input_buffer,size_t input_length,struct *message){
+bool deserialize(const uint8_t *input_buffer,size_t input_length,struct message *message){
+if(input_length<12) return false;
+message->header.version = input_buffer[0];
+message->header.type = input_buffer[1];
+message->header.payload_length = ((input_buffer[2]<<8) | input_buffer[3]);
+int k = 7;
+message->header.sequence = 0;
+for(int i=4;i<12;i++){
+message->header.sequence |= (((uint64_t)input_buffer[i])<<(8*k));
+  k--;
+}
+size_t required = 12 + message->header.payload_length;
+if(input_length<required || message->header.payload_length>MAX_ALLOWED_PAYLOAD) return false;
 
-
+memcpy(message->payload,input_buffer+12,message->header.payload_length);
+if(!validate(message)) return false;
+return true;
 }
 
-bool validate(const struct *message){
-
-
+bool validate(const struct message *message){
+if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO) || message->header.payload_length>MAX_ALLOWED_PAYLOAD){return false;}
+return true;
 }
 
-int main(){
-
-return 0;
-}
