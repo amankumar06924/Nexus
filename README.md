@@ -13,3 +13,8 @@ today i work on binary_protocol.c file , define the serilize function
 3 sep
 
 today i define deserilization and validation function
+
+4 sep 
+
+today i test my deserilize and serilize function and define new function
+bool message_init(struct message *message,uint8_t type,uint64_t sequence,const uint8_t *payload,size_t payload_length); because it help me to define message_header directly
