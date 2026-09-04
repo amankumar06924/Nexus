@@ -18,11 +18,11 @@ uint8_t type;
 uint16_t payload_length;
 uint64_t sequence;
 };
-
 struct message{
 struct Message_header header;
-uint8_t payload[4096];
+uint8_t payload[MAX_ALLOWED_PAYLOAD];
 };
+bool message_init(struct message *message,uint8_t type,uint64_t sequence,const uint8_t *payload,size_t payload_length);
 size_t serialize(const struct message*,uint8_t* output_buffer,size_t buffer_capacity);
 bool deserialize(const uint8_t* input_buffer,size_t input_length,struct message*);
 bool validate(const struct message*);

@@ -2,7 +2,17 @@
 #include<stdio.h>
 #include"binary_protocol.h"
 #include<string.h>
-
+bool message_init(struct message *message,uint8_t type,uint64_t sequence,const uint8_t *payload,size_t payload_length){
+if(message==NULL || (type!=PING && type!=ECHO) || payload_length>MAX_ALLOWED_PAYLOAD || (payload ==NULL && payload_length>0)) return false;
+message->header.type = type;
+message->header.sequence = sequence;
+message->header.payload_length = payload_length;
+message->header.version = BINARY_PROTOCOL_VERSION;
+if(payload_length>0){
+memcpy(message->payload,payload,payload_length);
+}
+return validate(message);
+}
 size_t serialize(const struct message *message,uint8_t *output_buffer,size_t buffer_capacity){
 if(buffer_capacity==0){return 0;}
 output_buffer[0] = message->header.version;
@@ -43,7 +53,7 @@ return true;
 }
 
 bool validate(const struct message *message){
-if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO) || message->header.payload_length>MAX_ALLOWED_PAYLOAD){return false;}
+if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)){return false;}
 return true;
 }
 
