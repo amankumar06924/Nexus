@@ -12,7 +12,7 @@ if (network_socket < 0){
 printf("Creating the socket failed (%d)\n\n", network_socket);
 exit(EXIT_FAILURE);
 }
-struct sockaddr_in server_address;
+struct sockaddr_in server_address={0};
 server_address.sin_family = AF_INET;
 server_address.sin_port = htons(9003);
 server_address.sin_addr.s_addr = INADDR_ANY;
@@ -21,6 +21,8 @@ if (connection_status < 0){
 printf ("There was an error making a connection to the server (%d) \n\n", connection_status); 
 exit(EXIT_FAILURE);
 }
+
+
 char server_response[256];
 recv(network_socket, &server_response, sizeof(server_response), 0);
 printf("The server sent the data : %s\n", server_response);
