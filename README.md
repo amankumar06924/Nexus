@@ -24,3 +24,7 @@ bool message_init(struct message *message,uint8_t type,uint64_t sequence,const u
 today i learn about how to implement TCP server and client in c link:-(https://medium.com/@shivambhadani_/understanding-tcp-and-building-our-own-tcp-server-in-c-language-8de9d9de78ef)  
 
 and familer with new error called error: lvalue required as an unary '&' operand. solution link:-(https://stackoverflow.com/questions/22788026/error-lvalue-required-as-unary-operand).
+
+8sep
+
+today i learn about memmove() function in c you can read about this function using (man memmove).

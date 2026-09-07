@@ -4,7 +4,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/in.h>
-#include "binary_brotocol.h"
+#include "binary_protocol.h"
+#include<string.h>
 
 int main(){
 char server_message[256] = {"you have connected to server "};
@@ -39,6 +40,7 @@ size_t byte_receive = 0;
 bool byte_receive_complete = false;
 uint16_t payload_length = 0;
 size_t frame_size = 0;
+size_t byte_consumed = 0;
 while(1){
 ssize_t recv_byte = recv(client_socket,receive_buffer+byte_receive,sizeof(receive_buffer)-byte_receive,0);
 if(recv_byte<0){
@@ -46,27 +48,29 @@ printf("error in recv byte!");
 exit(EXIT_FAILURE);
 }else if(recv_byte==0){printf("client disconnected!"); break;}
 byte_receive += (size_t)recv_byte;
-if(byte_receive>=(size_t)header_size){
+
+while(byte_receive>=(size_t)header_size){
 payload_length = ((receive_buffer[2]<<8)|receive_buffer[3]);
 if(payload_length>MAX_ALLOWED_PAYLOAD){
 printf("invalid payload length");
+close(client_socket);
+close(server_socket);
 exit(EXIT_FAILURE);
 }
 frame_size = header_size + payload_length;
-if(byte_receive>=frame_size){
-byte_receive_complete = true;
+if(byte_receive<frame_size){
 break;
-}
-}
-
 }
 struct message decoder;
 bool decoder_flag;
-if(byte_receive_complete){
 decoder_flag = deserialize(receive_buffer,frame_size,&decoder);
 if(decoder_flag)printf("deserilize succes!");
 else printf("deserilize failed!");
-} 
+size_t remaining_byte = byte_receive - frame_size;
+memmove(receive_buffer,receive_buffer+frame_size,remaining_byte);
+byte_receive = remaining_byte;
+}
+}
 close(server_socket);
 close(client_socket); 
 return 0; 
