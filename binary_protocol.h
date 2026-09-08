@@ -26,4 +26,5 @@ bool message_init(struct message *message,uint8_t type,uint64_t sequence,const u
 size_t serialize(const struct message*,uint8_t* output_buffer,size_t buffer_capacity);
 bool deserialize(const uint8_t* input_buffer,size_t input_length,struct message*);
 bool validate(const struct message*);
+//bool Send_all(int socket,const uint8_t *buffer,size_t len);
 #endif
