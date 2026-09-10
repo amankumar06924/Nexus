@@ -28,3 +28,5 @@ and familer with new error called error: lvalue required as an unary '&' operand
 8sep
 
 today i learn about memmove() function in c you can read about this function using (man memmove).
+
+implement tcp fragment message to test server working good or not send_fragmented_message(socket,serilization,buffer) and it rutern true false.

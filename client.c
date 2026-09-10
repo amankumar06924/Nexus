@@ -20,6 +20,7 @@ total_len += send_message;
 }
 return true;
 }
+bool send_fragmented_message(int socket,size_t serialization,const uint8_t *buffer);
 bool send_echo_message(int socket,uint64_t sequence,const uint8_t *payload,size_t payload_length){
 size_t max_buffer_size = 12 + MAX_ALLOWED_PAYLOAD;
 uint8_t buffer[max_buffer_size];
@@ -35,10 +36,26 @@ if (serialization == 0) {
 printf("message serialization failed!\n");
 return false;
 }
-bool send_all_message_flag =Send_all(socket,buffer,serialization);
+//bool send_all_message_flag =Send_all(socket,buffer,serialization);
+bool send_all_message_flag = send_fragmented_message(socket,serialization,buffer);
 if (!send_all_message_flag) {
 printf("send_all failed!\n");
 return false;
+}
+return true;
+}
+bool send_fragmented_message(int socket,size_t serialization,const uint8_t *buffer){
+size_t offset = 0;
+while(offset<serialization){
+size_t chunk_size = 3;
+if(serialization-offset < chunk_size){
+chunk_size = serialization - offset;
+}
+ssize_t fragmented_send_message = send(socket,buffer+offset,chunk_size,0);
+if(fragmented_send_message<0 || fragmented_send_message==0){
+return false;
+}
+offset+=chunk_size;
 }
 return true;
 }
@@ -62,17 +79,17 @@ const uint8_t payload1[] = "hello";
 const uint8_t payload2[] = "world";
 const uint8_t payload3[] = "low latency";
 const uint8_t payload4[] = "binary protocol";
-
 send_echo_message(network_socket,1,payload1,sizeof(payload1) - 1);
 send_echo_message(network_socket,2,payload2,sizeof(payload2) - 1);
 send_echo_message(network_socket,3,payload3,sizeof(payload3) - 1);
-send_echo_message(network_socket,4,payload4,sizeof(payload4) - 1);
+//send_echo_message(network_socket,4,payload4,sizeof(payload4) - 1);
 
 size_t max_buffer_size = 12+MAX_ALLOWED_PAYLOAD;
 size_t header_size = 12;
 uint8_t receive_buffer[max_buffer_size];
 size_t byte_receive = 0;
 struct message message;
+uint8_t expected_sequence = 1;
 while (1) {
 ssize_t recv_byte = recv(network_socket,receive_buffer + byte_receive,sizeof(receive_buffer) - byte_receive,0);
 if (recv_byte < 0) {
@@ -109,8 +126,9 @@ for (size_t i = 0;i < decoder.header.payload_length;i++) {
 printf("%c", decoder.payload[i]);
 }
 printf("\n");
-if (decoder.header.sequence == message.header.sequence) {
+if (decoder.header.sequence == expected_sequence) {
 printf("sequence verified!\n");
+expected_sequence++;
 } else {
 printf("sequence mismatch!\n");
 }
