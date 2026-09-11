@@ -21,6 +21,17 @@ total_len += send_message;
 return true;
 }
 bool send_fragmented_message(int socket,size_t serialization,const uint8_t *buffer);
+bool send_ping_message(int socket,uint64_t sequence){
+size_t max_buffer_size = 12 + MAX_ALLOWED_PAYLOAD;
+uint8_t buffer[max_buffer_size];
+struct message message;
+bool message_init_check = message_init(&message,PING,sequence,NULL,0);
+if(!message_init_check){printf("ping message init failed!\n");return false;}
+size_t serialization = serialize(&message,buffer,sizeof(buffer));
+if(serialization==0){printf("ping serialization failed!\n");return false;}
+if(!Send_all(socket,buffer,serialization)){printf("ping send failed!"); return false;}
+return true;
+}
 bool send_echo_message(int socket,uint64_t sequence,const uint8_t *payload,size_t payload_length){
 size_t max_buffer_size = 12 + MAX_ALLOWED_PAYLOAD;
 uint8_t buffer[max_buffer_size];
@@ -75,15 +86,15 @@ if (connection_status < 0){
 printf ("There was an error making a connection to the server (%d) \n\n", connection_status); 
 exit(EXIT_FAILURE);
 }
-const uint8_t payload1[] = "hello";
-const uint8_t payload2[] = "world";
-const uint8_t payload3[] = "low latency";
-const uint8_t payload4[] = "binary protocol";
-send_echo_message(network_socket,1,payload1,sizeof(payload1) - 1);
-send_echo_message(network_socket,2,payload2,sizeof(payload2) - 1);
-send_echo_message(network_socket,3,payload3,sizeof(payload3) - 1);
+//const uint8_t payload1[] = "hello";
+//const uint8_t payload2[] = "world";
+//const uint8_t payload3[] = "low latency";
+//const uint8_t payload4[] = "binary protocol";
+//send_echo_message(network_socket,1,payload1,sizeof(payload1) - 1);
+//send_echo_message(network_socket,2,payload2,sizeof(payload2) - 1);
+//send_echo_message(network_socket,3,payload3,sizeof(payload3) - 1);
 //send_echo_message(network_socket,4,payload4,sizeof(payload4) - 1);
-
+send_ping_message(network_socket,1);
 size_t max_buffer_size = 12+MAX_ALLOWED_PAYLOAD;
 size_t header_size = 12;
 uint8_t receive_buffer[max_buffer_size];
@@ -131,6 +142,15 @@ printf("sequence verified!\n");
 expected_sequence++;
 } else {
 printf("sequence mismatch!\n");
+}
+}
+if(decoder.header.type==PONG){
+printf("pong received!\n");
+if(decoder.header.sequence==expected_sequence){
+printf("ping/pong sequence verifid\n");
+expected_sequence++;
+}else{
+printf("ping/pong sequence mismatch\n");
 }
 }
 size_t remaining_byte =byte_receive - frame_size;

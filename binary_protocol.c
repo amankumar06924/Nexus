@@ -3,7 +3,7 @@
 #include"binary_protocol.h"
 #include<string.h>
 bool message_init(struct message *message,uint8_t type,uint64_t sequence,const uint8_t *payload,size_t payload_length){
-if(message==NULL || (type!=PING && type!=ECHO) || payload_length>MAX_ALLOWED_PAYLOAD || (payload ==NULL && payload_length>0)) return false;
+if(message==NULL || (type!=PING && type!=ECHO &&type !=PONG && type!=GET_STATS && type!=STATS) || payload_length>MAX_ALLOWED_PAYLOAD || (payload ==NULL && payload_length>0)) return false;
 message->header.type = type;
 message->header.sequence = sequence;
 message->header.payload_length = payload_length;
@@ -53,7 +53,7 @@ return true;
 }
 
 bool validate(const struct message *message){
-if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)){return false;}
+if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO &&message->header.type!=PONG && message->header.type!=GET_STATS && message->header.type!=STATS) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)||(message->header.type==PONG && message->header.payload_length!=0)||(message->header.type==GET_STATS && message->header.payload_length!=0)||(message->header.type==STATS && message->header.payload_length!=32)){return false;}
 return true;
 }
 

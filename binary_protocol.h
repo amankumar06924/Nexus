@@ -9,7 +9,10 @@
 
 enum message_type{
 PING,
-ECHO
+ECHO,
+PONG,
+GET_STATS,
+STATS
 };
 
 struct Message_header{

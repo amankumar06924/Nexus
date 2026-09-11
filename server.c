@@ -46,10 +46,15 @@ if (client_socket < 0){
 printf("Client socket is negative, couldn't accept");
 exit(EXIT_FAILURE);
 }
+uint64_t message_received = 0;
+uint64_t message_sent = 0;
+uint64_t byte_received = 0;
+uint64_t byte_sent = 0;
 size_t header_size = 12;
 size_t max_buffer_size = header_size + MAX_ALLOWED_PAYLOAD;
 uint8_t receive_buffer[max_buffer_size];
 uint8_t response_buffer[max_buffer_size];
+
 size_t byte_receive = 0;
 //bool byte_receive_complete = false;
 uint16_t payload_length = 0;
@@ -62,6 +67,7 @@ printf("error in recv byte!");
 exit(EXIT_FAILURE);
 }else if(recv_byte==0){printf("client disconnected!"); break;}
 byte_receive += (size_t)recv_byte;
+byte_received +=recv_byte;
 
 while(byte_receive>=(size_t)header_size){
 payload_length = ((receive_buffer[2]<<8)|receive_buffer[3]);
@@ -80,6 +86,7 @@ bool decoder_flag;
 decoder_flag = deserialize(receive_buffer,frame_size,&decoder);
 if(decoder_flag)printf("deserilize succes!");
 else{ printf("deserilize failed!"); exit(EXIT_FAILURE);}
+message_received++;
 size_t remaining_byte = byte_receive - frame_size;
 if(decoder.header.type==ECHO){
 struct message response;
@@ -98,6 +105,50 @@ if(!response_send_all){
 printf("response send_all message failed!");
 exit(EXIT_FAILURE);
 }
+message_sent++;
+byte_sent += response_serialization;
+}
+if(decoder.header.type==PING){
+struct message response;
+bool response_message_init = message_init(&response,PONG,decoder.header.sequence,NULL,0);
+if(!response_message_init){printf("PONG message init failed!\n");exit(EXIT_FAILURE);}
+size_t response_serialization = serialize(&response,response_buffer,sizeof(response_buffer));
+if(response_serialization==0){
+printf("PONG serialization failed!\n");
+exit(EXIT_FAILURE);
+}
+bool response_send_all = Send_all(client_socket,response_buffer,response_serialization);
+if(!response_send_all){printf("PONG send failed!\n");exit(EXIT_FAILURE);}
+message_sent++;
+byte_sent += response_serialization;
+}
+if(decoder.header.type==GET_STATS){
+struct message received;
+uint64_t mr = message_received;
+uint64_t ms = message_sent;
+uint64_t br = byte_received;
+uint64_t bs = byte_sent;
+received.payload[0] = mr;
+received.payload[1] = ms;
+received.payload[2] = br;
+received.payload[3] = bs;
+bool get_stats_message_init = message_init(&received,STATS,decoder.header.sequence,received.payload,32);
+if(!get_stats_message_init){
+printf("STATS message init failed!\n");
+exit(EXIT_FAILURE);
+}
+size_t get_stats_serialization = serialize(&received,,sizeof());
+if(get_stats_serialization==0){
+printf("get stats serialization failde!\n");
+exit(EXIT_FAILURE);
+}
+bool get_stats_response_send_all = Send_all(client_socket,,get_stats_serialization);
+if(!get_stats_response_send_all){
+printf("get stats response send all failed!\n");
+exit(EXIT_FAILURE);
+}
+message_sent++;
+byte_sent += get_stats_serialization;
 }
 memmove(receive_buffer,receive_buffer+frame_size,remaining_byte);
 byte_receive = remaining_byte;
