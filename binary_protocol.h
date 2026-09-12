@@ -6,6 +6,7 @@
 #include<stdbool.h>
 #define BINARY_PROTOCOL_VERSION 1
 #define MAX_ALLOWED_PAYLOAD 4096
+#define HEADER_SIZE 12
 
 enum message_type{
 PING,
@@ -30,4 +31,5 @@ size_t serialize(const struct message*,uint8_t* output_buffer,size_t buffer_capa
 bool deserialize(const uint8_t* input_buffer,size_t input_length,struct message*);
 bool validate(const struct message*);
 //bool Send_all(int socket,const uint8_t *buffer,size_t len);
+bool write_to_8byte_buffer(uint8_t *out_buffer,const uint64_t *in_buffer,uint64_t len_of_in_buffer);
 #endif

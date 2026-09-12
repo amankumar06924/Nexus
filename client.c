@@ -55,6 +55,28 @@ return false;
 }
 return true;
 }
+bool send_get_stats_message(int socket, uint64_t sequence){
+size_t max_buffer_size = HEADER_SIZE + MAX_ALLOWED_PAYLOAD;
+uint8_t buffer[max_buffer_size];
+struct message message;
+bool message_init_check =message_init(&message,GET_STATS,sequence,NULL,0);
+if (!message_init_check){
+printf("GET_STATS message initialization failed!\n");
+return false;
+}
+size_t serialization =serialize(&message,buffer,sizeof(buffer));
+if (serialization == 0){
+printf("GET_STATS serialization failed!\n");
+return false;
+}
+if (!Send_all(socket, buffer, serialization))
+{
+printf("GET_STATS send failed!\n");
+return false;
+}
+printf("GET_STATS sent successfully\n");
+return true;
+}
 bool send_fragmented_message(int socket,size_t serialization,const uint8_t *buffer){
 size_t offset = 0;
 while(offset<serialization){
@@ -68,6 +90,34 @@ return false;
 }
 offset+=chunk_size;
 }
+return true;
+}
+
+uint64_t read_u64_big_endian(const uint8_t *buffer){
+uint64_t value = 0;
+for (size_t i = 0; i < 8; i++){
+value =(value << 8) |(uint64_t)buffer[i];
+}
+return value;
+}
+bool print_stats(const struct message *message){
+if (message->header.payload_length != 32){
+printf("Invalid STATS payload length: %u\n",message->header.payload_length);
+return false;
+}
+const uint8_t *payload = message->payload;
+uint64_t messages_received =read_u64_big_endian(payload + 0);
+uint64_t messages_sent =read_u64_big_endian(payload + 8);
+uint64_t bytes_received =read_u64_big_endian(payload + 16);
+uint64_t bytes_sent =read_u64_big_endian(payload + 24);
+printf("\n");
+printf("========== SERVER STATS ==========\n");
+printf("Messages received : %lu\n", messages_received);
+printf("Messages sent     : %lu\n", messages_sent);
+printf("Bytes received    : %lu\n", bytes_received);
+printf("Bytes sent        : %lu\n", bytes_sent);
+printf("==================================\n");
+printf("\n");
 return true;
 }
 int main(){
@@ -95,6 +145,7 @@ exit(EXIT_FAILURE);
 //send_echo_message(network_socket,3,payload3,sizeof(payload3) - 1);
 //send_echo_message(network_socket,4,payload4,sizeof(payload4) - 1);
 send_ping_message(network_socket,1);
+send_get_stats_message(network_socket, 2);
 size_t max_buffer_size = 12+MAX_ALLOWED_PAYLOAD;
 size_t header_size = 12;
 uint8_t receive_buffer[max_buffer_size];
@@ -151,6 +202,16 @@ printf("ping/pong sequence verifid\n");
 expected_sequence++;
 }else{
 printf("ping/pong sequence mismatch\n");
+}
+}
+else if(decoder.header.type==STATS){
+printf("STATS received!\n");
+if(decoder.header.sequence==expected_sequence){
+printf("GET_STATS/STATS sequence verified!\n");
+print_stats(&decoder);
+expected_sequence++;
+}else{
+printf("GET_STATS/STAT sequence mismatch!\n");
 }
 }
 size_t remaining_byte =byte_receive - frame_size;

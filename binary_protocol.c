@@ -14,6 +14,9 @@ memcpy(message->payload,payload,payload_length);
 return validate(message);
 }
 size_t serialize(const struct message *message,uint8_t *output_buffer,size_t buffer_capacity){
+  if(message==NULL || output_buffer==NULL){
+return 0;
+  }
 if(buffer_capacity==0){return 0;}
 output_buffer[0] = message->header.version;
 if(buffer_capacity<2) return 1;
@@ -34,6 +37,9 @@ return 12 + message->header.payload_length;
 }
 
 bool deserialize(const uint8_t *input_buffer,size_t input_length,struct message *message){
+  if(input_buffer==NULL || message==NULL){
+return false;
+  }
 if(input_length<12) return false;
 message->header.version = input_buffer[0];
 message->header.type = input_buffer[1];
@@ -53,7 +59,23 @@ return true;
 }
 
 bool validate(const struct message *message){
+  if(message==NULL){
+return false;
+  }
 if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO &&message->header.type!=PONG && message->header.type!=GET_STATS && message->header.type!=STATS) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)||(message->header.type==PONG && message->header.payload_length!=0)||(message->header.type==GET_STATS && message->header.payload_length!=0)||(message->header.type==STATS && message->header.payload_length!=32)){return false;}
 return true;
 }
-
+bool write_to_8byte_buffer(uint8_t *out_buffer,const uint64_t *in_buffer,uint64_t len_of_in_buffer){
+  if(out_buffer==NULL || in_buffer==NULL){return false;}
+uint64_t k = 0;
+for(int i =0;i<len_of_in_buffer;i++){
+for(int j =7;j>=0;j--){
+out_buffer[k] = (in_buffer[i]>>(8*j)&0xFF);
+k++;
+}
+}
+if(k!=(len_of_in_buffer*8)){
+return false;
+}
+return true;
+}

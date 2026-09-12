@@ -54,7 +54,8 @@ size_t header_size = 12;
 size_t max_buffer_size = header_size + MAX_ALLOWED_PAYLOAD;
 uint8_t receive_buffer[max_buffer_size];
 uint8_t response_buffer[max_buffer_size];
-
+uint8_t send_stats_buffer[max_buffer_size];
+uint8_t stats_payload[32];
 size_t byte_receive = 0;
 //bool byte_receive_complete = false;
 uint16_t payload_length = 0;
@@ -85,7 +86,7 @@ struct message decoder;
 bool decoder_flag;
 decoder_flag = deserialize(receive_buffer,frame_size,&decoder);
 if(decoder_flag)printf("deserilize succes!");
-else{ printf("deserilize failed!"); exit(EXIT_FAILURE);}
+else{ printf("deserilize failed!");close(client_socket);close(server_socket);exit(EXIT_FAILURE);}
 message_received++;
 size_t remaining_byte = byte_receive - frame_size;
 if(decoder.header.type==ECHO){
@@ -93,6 +94,8 @@ struct message response;
 bool response_message_init = message_init(&response,ECHO,decoder.header.sequence,(uint8_t*)decoder.payload,decoder.header.payload_length);
 if(!response_message_init){
 printf("response message init fail!");
+close(client_socket);
+close(server_socket);
 exit(EXIT_FAILURE);
 }
 size_t response_serialization = serialize(&response,response_buffer,sizeof(response_buffer));
@@ -123,26 +126,29 @@ message_sent++;
 byte_sent += response_serialization;
 }
 if(decoder.header.type==GET_STATS){
-struct message received;
+struct message send_GET_STATS;
 uint64_t mr = message_received;
 uint64_t ms = message_sent;
 uint64_t br = byte_received;
 uint64_t bs = byte_sent;
-received.payload[0] = mr;
-received.payload[1] = ms;
-received.payload[2] = br;
-received.payload[3] = bs;
-bool get_stats_message_init = message_init(&received,STATS,decoder.header.sequence,received.payload,32);
+uint64_t in_buffer[4] = {mr,ms,br,bs};
+bool write_to_8byte_buffer_check = write_to_8byte_buffer(stats_payload,in_buffer,4);
+if(!write_to_8byte_buffer_check){
+printf("write to 8byte buffer failed!\n");
+exit(EXIT_FAILURE);
+}
+
+bool get_stats_message_init = message_init(&send_GET_STATS,STATS,decoder.header.sequence,stats_payload,sizeof(stats_payload));
 if(!get_stats_message_init){
 printf("STATS message init failed!\n");
 exit(EXIT_FAILURE);
 }
-size_t get_stats_serialization = serialize(&received,,sizeof());
+size_t get_stats_serialization = serialize(&send_GET_STATS,send_stats_buffer,sizeof(send_stats_buffer));
 if(get_stats_serialization==0){
 printf("get stats serialization failde!\n");
 exit(EXIT_FAILURE);
 }
-bool get_stats_response_send_all = Send_all(client_socket,,get_stats_serialization);
+bool get_stats_response_send_all = Send_all(client_socket,send_stats_buffer,get_stats_serialization);
 if(!get_stats_response_send_all){
 printf("get stats response send all failed!\n");
 exit(EXIT_FAILURE);
