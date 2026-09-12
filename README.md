@@ -32,3 +32,5 @@ today i learn about memmove() function in c you can read about this function usi
 implement tcp fragment message to test server working good or not send_fragmented_message(socket,serilization,buffer) and it rutern true false.
 
 add GET_STATS and STATS to check the status of server 
+
+tyr to implement multi request/response
