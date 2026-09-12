@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include"binary_protocol.h"
 #include<string.h>
+#define HEADER_SIZE 12
 bool Send_all(int socket,const uint8_t *buffer,size_t len){
 size_t total_len = 0;
 while(total_len<len){

@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include "binary_protocol.h"
 #include<string.h>
+#define HEADER_SIZE 12
+#define STATS_PAYLOAD_SIZE 32
 bool Send_all(int socket,const uint8_t *buffer,size_t len){
 size_t total_len = 0;
 while(total_len<len){
@@ -50,7 +52,7 @@ uint64_t message_received = 0;
 uint64_t message_sent = 0;
 uint64_t byte_received = 0;
 uint64_t byte_sent = 0;
-size_t header_size = 12;
+size_t header_size = HEADER_SIZE;
 size_t max_buffer_size = header_size + MAX_ALLOWED_PAYLOAD;
 uint8_t receive_buffer[max_buffer_size];
 uint8_t response_buffer[max_buffer_size];
@@ -127,10 +129,11 @@ byte_sent += response_serialization;
 }
 if(decoder.header.type==GET_STATS){
 struct message send_GET_STATS;
+size_t stats_frame_size = HEADER_SIZE + STATS_PAYLOAD_SIZE;
 uint64_t mr = message_received;
-uint64_t ms = message_sent;
+uint64_t ms = message_sent+1;
 uint64_t br = byte_received;
-uint64_t bs = byte_sent;
+uint64_t bs = byte_sent+stats_frame_size;
 uint64_t in_buffer[4] = {mr,ms,br,bs};
 bool write_to_8byte_buffer_check = write_to_8byte_buffer(stats_payload,in_buffer,4);
 if(!write_to_8byte_buffer_check){
@@ -148,6 +151,7 @@ if(get_stats_serialization==0){
 printf("get stats serialization failde!\n");
 exit(EXIT_FAILURE);
 }
+if(get_stats_serialization!= stats_frame_size){printf("unexpected stats frame size!\n"); exit(EXIT_FAILURE);}
 bool get_stats_response_send_all = Send_all(client_socket,send_stats_buffer,get_stats_serialization);
 if(!get_stats_response_send_all){
 printf("get stats response send all failed!\n");

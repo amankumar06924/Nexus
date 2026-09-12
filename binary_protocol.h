@@ -6,7 +6,6 @@
 #include<stdbool.h>
 #define BINARY_PROTOCOL_VERSION 1
 #define MAX_ALLOWED_PAYLOAD 4096
-#define HEADER_SIZE 12
 
 enum message_type{
 PING,
