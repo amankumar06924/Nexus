@@ -137,16 +137,17 @@ if (connection_status < 0){
 printf ("There was an error making a connection to the server (%d) \n\n", connection_status); 
 exit(EXIT_FAILURE);
 }
-//const uint8_t payload1[] = "hello";
-//const uint8_t payload2[] = "world";
+send_ping_message(network_socket,1);
+const uint8_t payload1[] = "hello";
+const uint8_t payload2[] = "world";
 //const uint8_t payload3[] = "low latency";
 //const uint8_t payload4[] = "binary protocol";
-//send_echo_message(network_socket,1,payload1,sizeof(payload1) - 1);
-//send_echo_message(network_socket,2,payload2,sizeof(payload2) - 1);
+send_echo_message(network_socket,2,payload1,sizeof(payload1) - 1);
+send_echo_message(network_socket,3,payload2,sizeof(payload2) - 1);
 //send_echo_message(network_socket,3,payload3,sizeof(payload3) - 1);
 //send_echo_message(network_socket,4,payload4,sizeof(payload4) - 1);
-send_ping_message(network_socket,1);
-send_get_stats_message(network_socket, 2);
+//send_ping_message(network_socket,1);
+send_get_stats_message(network_socket, 4);
 size_t max_buffer_size = 12+MAX_ALLOWED_PAYLOAD;
 size_t header_size = 12;
 uint8_t receive_buffer[max_buffer_size];
