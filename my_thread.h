@@ -4,10 +4,19 @@
 #include<stdio.h>
 #include<unistd.h>
 #include<pthread.h>
-struct worker_arg{
+#define MAX_CLIENTS 10
+typedef struct{
+int client_fd;
+int client_id;
+int active;
+}client;
+struct data{
 int client_fd;
 int client_id;
 };
-void *worker(void *arg);
+client clients[MAX_CLIENTS];
+pthread_mutex_t clients_lock = PTHREAD_MUTEX_INITIALIZER;
+int add_client(int client_fd,int client_id);
+int remove_client(int client_id);
 
 #endif
