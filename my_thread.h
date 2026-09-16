@@ -2,8 +2,13 @@
 #define MY_THREAD_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define MAX_CLIENTS 10
 
@@ -34,6 +39,7 @@ int client_id;
 extern client clients[MAX_CLIENTS];
 extern pthread_mutex_t clients_lock;
 
+bool Send_all(int socket,const uint8_t *buffer,size_t len);
 int add_client(int client_fd, int client_id);
 int remove_client(int client_id);
 void *worker(void *arg);
@@ -48,6 +54,7 @@ const char *client_state_name(int state);
 int client_manager_init(void);
 int client_manager_destroy(void);
 void print_clients(void);
+bool send_stats_response(int client_fd, uint64_t sequence);
 int get_client_snapshot(int index,client *out_client);
 int connect_client(int client_fd,int client_id);
 int reconnect_client(int client_fd,int client_id);

@@ -6,6 +6,8 @@
 #include<stdbool.h>
 #define BINARY_PROTOCOL_VERSION 1
 #define MAX_ALLOWED_PAYLOAD 4096
+#define HEADER_SIZE 12
+#define STATS_PAYLOAD_SIZE 32
 
 enum message_type{
 PING,
@@ -21,6 +23,16 @@ uint8_t type;
 uint16_t payload_length;
 uint64_t sequence;
 };
+
+struct stats_payload {
+uint64_t active_clients;
+uint64_t connected_clients;
+uint64_t closing_clients;
+uint64_t free_slots;
+};
+
+static_assert(sizeof(struct stats_payload)==STATS_PAYLOAD_SIZE,"stats_payload size must be exaxtly 32 bytes");
+
 struct message{
 struct Message_header header;
 uint8_t payload[MAX_ALLOWED_PAYLOAD];

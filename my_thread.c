@@ -1,6 +1,22 @@
 #include"my_thread.h"
+#include"binary_protocol.h"
 client clients[MAX_CLIENTS];
 pthread_mutex_t clients_lock;
+
+bool Send_all(int socket,const uint8_t *buffer,size_t len){
+size_t total_len = 0;
+while(total_len<len){
+ssize_t send_message = send(socket,buffer+total_len,len-total_len,0);
+if(send_message<0){
+return false;
+}
+if(send_message==0){
+return false;
+}
+total_len += send_message;
+}
+return true;
+}
 
 int add_client(int client_fd,int client_id){
 if(client_id<0 || client_fd<0){
@@ -48,12 +64,183 @@ pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_NOT_FOUND;
 }
 
+bool send_stats_response(int client_fd, uint64_t sequence){
+struct stats_payload stats = {
+.active_clients = count_active_clients(),
+.connected_clients = count_connected_clients(),
+.closing_clients = count_closing_clients(),
+.free_slots = count_free_slots()
+};
+struct message response;
+bool initialized = message_init(&response,STATS,sequence,(const uint8_t *)&stats,sizeof(stats));
+if(!initialized){
+printf("[worker] STATS message initialization failed\n");
+return false;
+}
+uint8_t response_buffer[HEADER_SIZE + sizeof(stats)];
+size_t serialized_size = serialize(&response,response_buffer,sizeof(response_buffer));
+if(serialized_size == 0){
+printf("[worker] STATS serialization failed\n");
+return false;
+}
+if(!Send_all(client_fd, response_buffer, serialized_size)){
+printf("[worker] STATS send failed\n");
+return false;
+}
+printf("[worker] STATS sent: active=%lu connected=%lu closing=%lu free=%lu\n",stats.active_clients,stats.connected_clients,stats.closing_clients,stats.free_slots);
+return true;
+}
+
+
+
 void *worker(void *arg){
 struct data *data = arg;
-int add_client_check = add_client(data->client_fd,data->client_id);
-if(add_client_check!=0){
-printf("add client failed! for %d , %d",data->client_fd,data->client_id);
+if(data==NULL){return NULL;}
+int client_fd = data->client_fd;
+int client_id = data->client_id;
+free(data);
+
+int add_client_check = add_client(client_fd,client_id);
+if(add_client_check!=CLIENT_OK){
+printf("[WORKER] failed to add client: fd=%d | id=%d | result=%d\n",client_fd,client_id,add_client_check);
+close(client_fd);
+return NULL;
 }
+printf("[worker] client register: id=%d, fd=%d\n",client_id,client_fd);
+uint8_t receive_buffer[8192];
+size_t buffered_bytes = 0;
+bool protocol_error = false;
+while(1){
+if(buffered_bytes==sizeof(receive_buffer)){
+fprintf(stderr,"[workder] receive buffer full\n");
+break;
+}
+ssize_t bytes_read = recv(client_fd,receive_buffer+buffered_bytes,sizeof(receive_buffer)-buffered_bytes,0);
+if(bytes_read>0){
+buffered_bytes += bytes_read;
+printf("[worker] client id=%d receive: %zd bytes\n",client_id,bytes_read);
+if(buffered_bytes<HEADER_SIZE){
+printf("[worker] waiting for complete header...\n");
+continue;
+}
+printf("[worker] complete header received\n");
+while(buffered_bytes>=HEADER_SIZE){
+uint16_t payload_length = ((receive_buffer[2]<<8)|receive_buffer[3]);
+if(payload_length>MAX_ALLOWED_PAYLOAD){
+printf("invalid payload length : %u\n",payload_length);
+protocol_error = true;
+break;
+}
+size_t frame_size = HEADER_SIZE + payload_length;
+if(buffered_bytes<frame_size){  
+printf("worker waiting for complete frame...\n");
+break;
+}
+struct message incoming_message;
+bool decoded = deserialize(receive_buffer,frame_size,&incoming_message);
+if(!decoded){
+printf("[worker] invalid frame received\n");
+protocol_error = true;
+break;
+}
+printf("[worker] frame decoded successfully\n");
+printf("worker message type : %u\n",incoming_message.header.type);
+printf("worker sequence %lu\n",incoming_message.header.sequence);
+switch(incoming_message.header.type){
+  case PING: {
+    uint8_t response_buffer[HEADER_SIZE];
+    printf("worker receive PING\n");
+    struct message response;
+    bool response_message_init = message_init(&response,PONG,incoming_message.header.sequence,NULL,0);
+    if(!response_message_init){
+    printf("response message init fail!");
+    close(client_fd);
+    exit(EXIT_FAILURE);
+    }
+    size_t response_serialization = serialize(&response,response_buffer,sizeof(response_buffer));
+    if(response_serialization==0){
+    printf("PONG serialization failed!\n");
+    close(client_fd);
+    exit(EXIT_FAILURE);
+    }
+    bool response_send_all = Send_all(client_fd,response_buffer,response_serialization);
+    if(!response_send_all){printf("PONG send failed!\n");protocol_error=true;break;}
+
+    printf("pong sent successfuly\n");
+    break;
+             }
+  case ECHO: {
+    printf("worker receive ECHO\n");
+    struct message response;
+    bool response_message_init =message_init(&response,ECHO,incoming_message.header.sequence,incoming_message.payload,incoming_message.header.payload_length);
+    if (!response_message_init) {
+        printf("ECHO response message init failed!\n");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+    uint8_t response_buffer[HEADER_SIZE + incoming_message.header.payload_length];
+    size_t response_serialization =serialize(&response,response_buffer,sizeof(response_buffer));
+    if (response_serialization == 0) {
+        printf("ECHO serialization failed!\n");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+    bool response_send_all =
+        Send_all(client_fd,response_buffer,response_serialization);
+    if (!response_send_all) {
+        printf("ECHO response send failed!\n");
+        protocol_error = true;
+        break;
+    }
+    printf("ECHO response sent successfully\n");
+    break;
+                 }         
+  case GET_STATS: {
+    printf("[worker] GET_STATS received\n");
+    bool stats_sent = send_stats_response(client_fd,incoming_message.header.sequence);
+    if (!stats_sent) {
+      protocol_error = true;
+      break;
+    }
+    break;
+                  }
+  default:{
+    printf("unknown message type :%u\n",incoming_message.header.type);
+    break;
+          }
+}
+buffered_bytes -= frame_size;
+if(buffered_bytes>0){
+memmove(receive_buffer,receive_buffer+frame_size,buffered_bytes);
+}
+printf("[worker] remaining buffered bytes: %zu\n",buffered_bytes);
+}
+if (protocol_error) {
+    printf("[worker] protocol error, closing connection: id=%d\n", client_id);
+    break;
+}
+}else if(bytes_read==0){
+printf("[worker] client disconnected: id=%d\n",client_id);
+break;
+}else{
+if(errno==EINTR){
+continue;
+}
+perror("[worker] recv failed!\n");
+break;
+}
+}
+printf("[worker] client id=%d worker ending\n",client_id);
+int result = mark_client_closing(client_id);
+if(result!=CLIENT_OK){
+printf("[worker] failed to mark client closing: id=%d error=%d\n",client_id,result);
+}
+close(client_fd);
+result = remove_client(client_id);
+if(result!=CLIENT_OK){
+printf("[worker] failed to remove client: id=%d error=%d\n",client_id,result);
+}
+printf("[worker] client cleaned up: id=%d fd=%d\n",client_id,client_fd);
 return NULL;
 }
 

@@ -5,25 +5,15 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include "binary_protocol.h"
+#include "my_thread.h"
 #include<string.h>
 #define HEADER_SIZE 12
-#define STATS_PAYLOAD_SIZE 32
-bool Send_all(int socket,const uint8_t *buffer,size_t len){
-size_t total_len = 0;
-while(total_len<len){
-ssize_t send_message = send(socket,buffer+total_len,len-total_len,0);
-if(send_message<0){
-return false;
-}
-if(send_message==0){
-return false;
-}
-total_len += send_message;
-}
-return true;
-}
+
 int main(){
-//char server_message[256] = {"you have connected to server "};
+if(client_manager_init()!=CLIENT_OK){
+fprintf(stderr,"client manager initialization failed!\n");
+return EXIT_FAILURE;
+}
 int server_socket;
 server_socket = socket(AF_INET, SOCK_STREAM, 0);
 if (server_socket < 0){
@@ -43,128 +33,34 @@ printf("Socket listening failed\n\n");
 exit(EXIT_FAILURE);
 }
 int client_socket;
+int next_client_id = 1;
+while(1){
 client_socket = accept(server_socket,NULL,NULL); // this accept() function does the 3-way handshake.
 if (client_socket < 0){
-printf("Client socket is negative, couldn't accept");
-exit(EXIT_FAILURE);
+perror("accept failed\n");
+continue;
 }
-uint64_t message_received = 0;
-uint64_t message_sent = 0;
-uint64_t byte_received = 0;
-uint64_t byte_sent = 0;
-size_t header_size = HEADER_SIZE;
-size_t max_buffer_size = header_size + MAX_ALLOWED_PAYLOAD;
-uint8_t receive_buffer[max_buffer_size];
-uint8_t response_buffer[max_buffer_size];
-uint8_t send_stats_buffer[max_buffer_size];
-uint8_t stats_payload[32];
-size_t byte_receive = 0;
-//bool byte_receive_complete = false;
-uint16_t payload_length = 0;
-size_t frame_size = 0;
-//size_t byte_consumed = 0;
-while(1){
-ssize_t recv_byte = recv(client_socket,receive_buffer+byte_receive,sizeof(receive_buffer)-byte_receive,0);
-if(recv_byte<0){
-printf("error in recv byte!");
-exit(EXIT_FAILURE);
-}else if(recv_byte==0){printf("client disconnected!"); break;}
-byte_receive += (size_t)recv_byte;
-byte_received +=recv_byte;
-
-while(byte_receive>=(size_t)header_size){
-payload_length = ((receive_buffer[2]<<8)|receive_buffer[3]);
-if(payload_length>MAX_ALLOWED_PAYLOAD){
-printf("invalid payload length");
+struct data *client_data = malloc(sizeof(struct data));
+if(client_data==NULL){
+perror("malloc failed!\n");
 close(client_socket);
-close(server_socket);
-exit(EXIT_FAILURE);
+continue;
 }
-frame_size = header_size + payload_length;
-if(byte_receive<frame_size){
-break;
-}
-struct message decoder;
-bool decoder_flag;
-decoder_flag = deserialize(receive_buffer,frame_size,&decoder);
-if(decoder_flag)printf("deserilize succes!");
-else{ printf("deserilize failed!");close(client_socket);close(server_socket);exit(EXIT_FAILURE);}
-message_received++;
-size_t remaining_byte = byte_receive - frame_size;
-if(decoder.header.type==ECHO){
-struct message response;
-bool response_message_init = message_init(&response,ECHO,decoder.header.sequence,(uint8_t*)decoder.payload,decoder.header.payload_length);
-if(!response_message_init){
-printf("response message init fail!");
+client_data->client_fd = client_socket;
+client_data->client_id = next_client_id++;
+int assigned_id = client_data->client_id;
+int assigned_fd = client_data->client_fd;
+pthread_t thread;
+int result = pthread_create(&thread,NULL,worker,client_data);
+if(result!=0){
+fprintf(stderr,"pthread_create failed\n");
 close(client_socket);
-close(server_socket);
-exit(EXIT_FAILURE);
+free(client_data);
+continue;
 }
-size_t response_serialization = serialize(&response,response_buffer,sizeof(response_buffer));
-if(response_serialization<(response.header.payload_length+12)){
-printf("response serialization failed !");
-exit(EXIT_FAILURE);
+pthread_detach(thread);
+printf("[server] new clinet accepted id=%d fd=%d\n",assigned_id,assigned_fd);
 }
-bool response_send_all = Send_all(client_socket,response_buffer,response_serialization);
-if(!response_send_all){
-printf("response send_all message failed!");
-exit(EXIT_FAILURE);
-}
-message_sent++;
-byte_sent += response_serialization;
-}
-if(decoder.header.type==PING){
-struct message response;
-bool response_message_init = message_init(&response,PONG,decoder.header.sequence,NULL,0);
-if(!response_message_init){printf("PONG message init failed!\n");exit(EXIT_FAILURE);}
-size_t response_serialization = serialize(&response,response_buffer,sizeof(response_buffer));
-if(response_serialization==0){
-printf("PONG serialization failed!\n");
-exit(EXIT_FAILURE);
-}
-bool response_send_all = Send_all(client_socket,response_buffer,response_serialization);
-if(!response_send_all){printf("PONG send failed!\n");exit(EXIT_FAILURE);}
-message_sent++;
-byte_sent += response_serialization;
-}
-if(decoder.header.type==GET_STATS){
-struct message send_GET_STATS;
-size_t stats_frame_size = HEADER_SIZE + STATS_PAYLOAD_SIZE;
-uint64_t mr = message_received;
-uint64_t ms = message_sent+1;
-uint64_t br = byte_received;
-uint64_t bs = byte_sent+stats_frame_size;
-uint64_t in_buffer[4] = {mr,ms,br,bs};
-bool write_to_8byte_buffer_check = write_to_8byte_buffer(stats_payload,in_buffer,4);
-if(!write_to_8byte_buffer_check){
-printf("write to 8byte buffer failed!\n");
-exit(EXIT_FAILURE);
-}
-
-bool get_stats_message_init = message_init(&send_GET_STATS,STATS,decoder.header.sequence,stats_payload,sizeof(stats_payload));
-if(!get_stats_message_init){
-printf("STATS message init failed!\n");
-exit(EXIT_FAILURE);
-}
-size_t get_stats_serialization = serialize(&send_GET_STATS,send_stats_buffer,sizeof(send_stats_buffer));
-if(get_stats_serialization==0){
-printf("get stats serialization failde!\n");
-exit(EXIT_FAILURE);
-}
-if(get_stats_serialization!= stats_frame_size){printf("unexpected stats frame size!\n"); exit(EXIT_FAILURE);}
-bool get_stats_response_send_all = Send_all(client_socket,send_stats_buffer,get_stats_serialization);
-if(!get_stats_response_send_all){
-printf("get stats response send all failed!\n");
-exit(EXIT_FAILURE);
-}
-message_sent++;
-byte_sent += get_stats_serialization;
-}
-memmove(receive_buffer,receive_buffer+frame_size,remaining_byte);
-byte_receive = remaining_byte;
-}
-}
-close(server_socket);
-close(client_socket); 
+close(server_socket); 
 return 0; 
 }

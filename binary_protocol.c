@@ -62,13 +62,13 @@ bool validate(const struct message *message){
   if(message==NULL){
 return false;
   }
-if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO &&message->header.type!=PONG && message->header.type!=GET_STATS && message->header.type!=STATS) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)||(message->header.type==PONG && message->header.payload_length!=0)||(message->header.type==GET_STATS && message->header.payload_length!=0)||(message->header.type==STATS && message->header.payload_length!=32)){return false;}
+if(message->header.version!= BINARY_PROTOCOL_VERSION || (message->header.type!=PING && message->header.type!=ECHO &&message->header.type!=PONG && message->header.type!=GET_STATS && message->header.type!=STATS) || message->header.payload_length>MAX_ALLOWED_PAYLOAD || (message->header.type==PING && message->header.payload_length!=0)||(message->header.type==PONG && message->header.payload_length!=0)||(message->header.type==GET_STATS && message->header.payload_length!=0)||(message->header.type==STATS && message->header.payload_length!=STATS_PAYLOAD_SIZE)){return false;}
 return true;
 }
 bool write_to_8byte_buffer(uint8_t *out_buffer,const uint64_t *in_buffer,uint64_t len_of_in_buffer){
   if(out_buffer==NULL || in_buffer==NULL){return false;}
 uint64_t k = 0;
-for(int i =0;i<len_of_in_buffer;i++){
+for(uint64_t i =0;i<len_of_in_buffer;i++){
 for(int j =7;j>=0;j--){
 out_buffer[k] = (in_buffer[i]>>(8*j)&0xFF);
 k++;
