@@ -55,12 +55,12 @@ if (client_socket < 0){
     if(shutdown_request){break;}
     continue;
   }
-perror("accept failed\n");
+perror("accept failed!");
 continue;
 }
 struct data *client_data = malloc(sizeof(struct data));
 if(client_data==NULL){
-perror("malloc failed!\n");
+perror("malloc failed!"); // remove \n because perror() function khud newline add karte hai.
 close(client_socket);
 continue;
 }
@@ -76,10 +76,16 @@ close(client_socket);
 free(client_data);
 continue;
 }
-pthread_detach(thread);
+//pthread_detach(thread);
 printf("[server] new clinet accepted id=%d fd=%d\n",assigned_id,assigned_fd);
 }
 printf("[server] shutdown requested!\n");
+int disconnected_client = client_manager_disconnect_all();
+printf("[server] shutdown signal sent to %d clients\n",disconnected_client);
+int joined_workers = client_manager_join_all_workers();
+printf("[server] %d worker threads joined\n",joined_workers);
+//int marked_client = client_manager_mark_all_closing();
+//printf("[server] %d client marked closing\n",marked_client);
 close(server_socket); 
 return 0; 
 }

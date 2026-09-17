@@ -29,6 +29,8 @@ int client_fd;
 int client_id;
 int active;
 int client_state;
+pthread_t thread_id;
+int thread_joinable;
 } client;
 
 struct data {
@@ -40,7 +42,7 @@ extern client clients[MAX_CLIENTS];
 extern pthread_mutex_t clients_lock;
 
 bool Send_all(int socket,const uint8_t *buffer,size_t len);
-int add_client(int client_fd, int client_id);
+int add_client(int client_fd, int client_id,pthread_t thread_id);
 int remove_client(int client_id);
 void *worker(void *arg);
 int count_active_clients(void);
@@ -65,4 +67,5 @@ int client_manager_reset(void);
 int client_manager_validate(void);
 int client_manager_mark_all_closing(void);
 int client_manager_disconnect_all(void);
+int client_manager_join_all_workers(void);
 #endif

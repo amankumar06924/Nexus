@@ -18,7 +18,7 @@ total_len += send_message;
 return true;
 }
 
-int add_client(int client_fd,int client_id){
+int add_client(int client_fd,int client_id,pthread_t thread_id){
 if(client_id<0 || client_fd<0){
 return CLIENT_ERR_INVALID;
 }
@@ -35,6 +35,8 @@ clients[i].client_fd = client_fd;
 clients[i].client_id = client_id;
 clients[i].active = 1;
 clients[i].client_state = CLIENT_CONNECTED;
+clients[i].thread_id = thread_id;
+clients[i].thread_joinable = 1;
 pthread_mutex_unlock(&clients_lock);
 return 0;
 }
@@ -56,6 +58,8 @@ return CLIENT_ERR_NOT_FOUND;
   clients[i].client_id  = -1;
   clients[i].client_fd  = -1;
   clients[i].client_state = CLIENT_FREE;
+  //clients[i].thread_id = 0;
+  clients[i].thread_joinable = 0;
   pthread_mutex_unlock(&clients_lock);
   return CLIENT_OK;
 }
@@ -107,8 +111,8 @@ if(data==NULL){return NULL;}
 int client_fd = data->client_fd;
 int client_id = data->client_id;
 free(data);
-
-int add_client_check = add_client(client_fd,client_id);
+pthread_t thread_id = pthread_self();
+int add_client_check = add_client(client_fd,client_id,thread_id);
 if(add_client_check!=CLIENT_OK){
 printf("[WORKER] failed to add client: fd=%d | id=%d | result=%d\n",client_fd,client_id,add_client_check);
 close(client_fd);
@@ -380,6 +384,8 @@ clients[i].active = 0;
 clients[i].client_id = -1;
 clients[i].client_fd = -1;
 clients[i].client_state = CLIENT_FREE;
+//clients[i].thread_id = 0;
+clients[i].thread_joinable = 0;
 }
 return 0;
 }
@@ -415,7 +421,7 @@ return CLIENT_OK;
 int connect_client(int client_fd,int client_id){
 if(client_fd<0){return CLIENT_ERR_INVALID_FD;}
 if(client_id<0){return CLIENT_ERR_INVALID_ID;}
-return add_client(client_fd,client_id);
+return add_client(client_fd,client_id,pthread_self());
 }
 int reconnect_client(int client_fd, int client_id){
 if (client_fd < 0) {
@@ -496,6 +502,7 @@ clients[i].client_fd = -1;
 clients[i].client_id = -1;
 clients[i].active    =  0;
 clients[i].client_state =CLIENT_FREE;
+//clients[i].thread_id = 0;
 }
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_OK;
@@ -543,6 +550,7 @@ for (int i = 0; i < MAX_CLIENTS; i++) {
 if(clients[i].active &&clients[i].client_state == CLIENT_CONNECTED) {
 clients[i].client_state = CLIENT_CLOSING;
 changed++;
+printf("[manager] client %d marked closing\n",i+1);
 }
 }
 pthread_mutex_unlock(&clients_lock);
@@ -553,14 +561,46 @@ int client_manager_disconnect_all(void){
 int disconnected = 0;
 pthread_mutex_lock(&clients_lock);
 for(int i = 0; i < MAX_CLIENTS; i++) {
-if(clients[i].active){
-disconnected++;
+if(!clients[i].active){
+continue;
 }
-clients[i].active = 0;
-clients[i].client_id = -1;
-clients[i].client_fd = -1;
-clients[i].client_state = CLIENT_FREE;
+int client_fd = clients[i].client_fd;
+int client_id = clients[i].client_id;
+clients[i].client_state = CLIENT_CLOSING;
+if(client_fd>=0){
+if(shutdown(client_fd,SHUT_RDWR)==-1){
+if(errno!=ENOTCONN){
+fprintf(stderr,"[manager] shutdown failed for client id=%d fd=%d: %s\n",client_id,client_fd,strerror(errno));
+}
+}else {
+printf("[manager] client id=%d fd=%d disconnected\n",client_id,client_fd);
+}
+}
+disconnected++;
 }
 pthread_mutex_unlock(&clients_lock);
 return disconnected;
+}
+
+int client_manager_join_all_workers(void){
+pthread_t threads[MAX_CLIENTS];
+int thread_count = 0;
+pthread_mutex_lock(&clients_lock);
+for(int i = 0; i < MAX_CLIENTS; i++) {
+if(clients[i].thread_joinable) {threads[thread_count] = clients[i].thread_id;
+thread_count++;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+int joined_count = 0;
+for(int i = 0; i < thread_count; i++) {
+int result = pthread_join(threads[i], NULL);
+if(result == 0) {
+joined_count++;
+}else{
+fprintf(stderr,"[manager] pthread_join failed: %s\n",
+strerror(result));
+}
+}
+return joined_count;
 }
