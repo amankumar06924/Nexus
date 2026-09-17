@@ -71,13 +71,21 @@ struct stats_payload stats = {
 .closing_clients = count_closing_clients(),
 .free_slots = count_free_slots()
 };
+uint64_t values[4] = {
+stats.active_clients,
+stats.connected_clients,
+stats.closing_clients,
+stats.free_slots
+};
+uint8_t stats_buffer[STATS_PAYLOAD_SIZE];
+write_to_8byte_buffer(stats_buffer,values,4);
 struct message response;
-bool initialized = message_init(&response,STATS,sequence,(const uint8_t *)&stats,sizeof(stats));
+bool initialized = message_init(&response,STATS,sequence,stats_buffer,STATS_PAYLOAD_SIZE);
 if(!initialized){
 printf("[worker] STATS message initialization failed\n");
 return false;
 }
-uint8_t response_buffer[HEADER_SIZE + sizeof(stats)];
+uint8_t response_buffer[HEADER_SIZE + STATS_PAYLOAD_SIZE];
 size_t serialized_size = serialize(&response,response_buffer,sizeof(response_buffer));
 if(serialized_size == 0){
 printf("[worker] STATS serialization failed\n");

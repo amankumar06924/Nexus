@@ -6,10 +6,24 @@
 #include <netinet/in.h>
 #include "binary_protocol.h"
 #include "my_thread.h"
-#include<string.h>
+#include <string.h>
+#include <signal.h>
+#include <errno.h>
 #define HEADER_SIZE 12
-
+volatile sig_atomic_t shutdown_request = 0;
+void handle_sigint(int sig){
+(void)sig;
+shutdown_request = 1;
+}
 int main(){
+struct sigaction sa = {0};
+sa.sa_handler = handle_sigint;
+sigemptyset(&sa.sa_mask);
+sa.sa_flags = 0;
+if(sigaction(SIGINT,&sa,NULL)==-1){
+perror("sigaction failed\n");
+return EXIT_FAILURE;
+}
 if(client_manager_init()!=CLIENT_OK){
 fprintf(stderr,"client manager initialization failed!\n");
 return EXIT_FAILURE;
@@ -34,9 +48,13 @@ exit(EXIT_FAILURE);
 }
 int client_socket;
 int next_client_id = 1;
-while(1){
+while(!shutdown_request){
 client_socket = accept(server_socket,NULL,NULL); // this accept() function does the 3-way handshake.
 if (client_socket < 0){
+  if(errno==EINTR){
+    if(shutdown_request){break;}
+    continue;
+  }
 perror("accept failed\n");
 continue;
 }
@@ -61,6 +79,7 @@ continue;
 pthread_detach(thread);
 printf("[server] new clinet accepted id=%d fd=%d\n",assigned_id,assigned_fd);
 }
+printf("[server] shutdown requested!\n");
 close(server_socket); 
 return 0; 
 }
