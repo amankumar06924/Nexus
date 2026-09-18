@@ -1,5 +1,7 @@
 # Nexus
+
 - **A modular TCP server framework written in C.
+
 ---
 
 today is 1sep and i work on implementing binary protocol in c. 
