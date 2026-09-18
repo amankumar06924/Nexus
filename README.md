@@ -1,6 +1,5 @@
 # Nexus
-
-- **A modular TCP server framework written in C.
+A modular TCP server framework written in C.
 
 ---
 
@@ -34,7 +33,7 @@ learn about #include<signal.h> header and volatile keywordsig_atomic_t for detai
 
 ---
 
-- **Makefile 
+## Makefile 
 
 Build everything :- make
 
@@ -46,7 +45,9 @@ Compiled files delete:- make clean
 
 Force everything to rebuild:- make -B
 
-- **For Run
+## For Run
 make
+
 ./sever
+
 ./client
