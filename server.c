@@ -49,6 +49,10 @@ exit(EXIT_FAILURE);
 int client_socket;
 int next_client_id = 1;
 while(!shutdown_request){
+  int reaped = client_manager_reap_finished_workers();
+  if(reaped>0){
+printf("[manager] reaped %d finished workers\n",reaped);
+  }
 client_socket = accept(server_socket,NULL,NULL); // this accept() function does the 3-way handshake.
 if (client_socket < 0){
   if(errno==EINTR){

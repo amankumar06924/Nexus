@@ -30,13 +30,14 @@ return CLIENT_ERR_DUPLICATE;
 }
 }
 for(int i=0;i<MAX_CLIENTS;i++){
-if(clients[i].active==0){
+if(clients[i].active==0 && clients[i].thread_joinable==0){
 clients[i].client_fd = client_fd;
 clients[i].client_id = client_id;
 clients[i].active = 1;
 clients[i].client_state = CLIENT_CONNECTED;
 clients[i].thread_id = thread_id;
 clients[i].thread_joinable = 1;
+clients[i].thread_finished = 0;
 pthread_mutex_unlock(&clients_lock);
 return 0;
 }
@@ -44,6 +45,20 @@ return 0;
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_FULL;
 }
+
+int mark_thread_finished(int client_id){
+pthread_mutex_lock(&clients_lock);
+for(int i = 0;i<MAX_CLIENTS;i++){
+if(clients[i].active==1 && clients[i].client_id == client_id){
+clients[i].thread_finished = 1;
+pthread_mutex_unlock(&clients_lock);
+return 1;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+return 0;
+}
+
 
 int remove_client(int client_id){
 if(client_id<0){return CLIENT_ERR_INVALID;}
@@ -59,7 +74,7 @@ return CLIENT_ERR_NOT_FOUND;
   clients[i].client_fd  = -1;
   clients[i].client_state = CLIENT_FREE;
   //clients[i].thread_id = 0;
-  clients[i].thread_joinable = 0;
+  clients[i].thread_joinable = 1;
   pthread_mutex_unlock(&clients_lock);
   return CLIENT_OK;
 }
@@ -248,6 +263,12 @@ if(result!=CLIENT_OK){
 printf("[worker] failed to mark client closing: id=%d error=%d\n",client_id,result);
 }
 close(client_fd);
+int mrk_thread_finish = mark_thread_finished(client_id);
+if(mrk_thread_finish){
+printf("[worker] mark_thread_finished\n");
+}else{
+printf("[worker] mark_thread_finished failed\n");
+}
 result = remove_client(client_id);
 if(result!=CLIENT_OK){
 printf("[worker] failed to remove client: id=%d error=%d\n",client_id,result);
@@ -600,6 +621,36 @@ joined_count++;
 }else{
 fprintf(stderr,"[manager] pthread_join failed: %s\n",
 strerror(result));
+}
+}
+return joined_count;
+}
+
+
+int client_manager_reap_finished_workers(void){
+pthread_t threads_ids[MAX_CLIENTS];
+int slot_ids[MAX_CLIENTS];
+int thread_count = 0;
+pthread_mutex_lock(&clients_lock);
+for(int i = 0; i < MAX_CLIENTS; i++){
+if(clients[i].thread_finished == 1 && clients[i].thread_joinable == 1){
+threads_ids[thread_count] = clients[i].thread_id;
+slot_ids[thread_count] = i;
+thread_count++;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+int joined_count = 0;
+for(int i = 0; i < thread_count; i++){
+int res = pthread_join(threads_ids[i], NULL);
+if(res == 0){
+joined_count++;
+pthread_mutex_lock(&clients_lock);
+clients[slot_ids[i]].thread_finished = 0;
+clients[slot_ids[i]].thread_joinable = 0;
+pthread_mutex_unlock(&clients_lock);
+}else{
+fprintf(stderr,"[manager] pthread_join failed: %s\n",strerror(res));
 }
 }
 return joined_count;
