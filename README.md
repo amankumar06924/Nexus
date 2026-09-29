@@ -31,6 +31,7 @@ tyr to implement multi request/response.
 
 learn about #include<signal.h> header and volatile keywordsig_atomic_t for detail you can chect tutorialpoint website doc , pthread_self().
 
+handle thread lifecycle 
 ---
 
 ## Makefile 
