@@ -127,13 +127,13 @@ int client_fd = data->client_fd;
 int client_id = data->client_id;
 free(data);
 pthread_t thread_id = pthread_self();
-int add_client_check = add_client(client_fd,client_id,thread_id);
-if(add_client_check!=CLIENT_OK){
-printf("[WORKER] failed to add client: fd=%d | id=%d | result=%d\n",client_fd,client_id,add_client_check);
-close(client_fd);
-return NULL;
-}
-printf("[worker] client register: id=%d, fd=%d\n",client_id,client_fd);
+// int add_client_check = add_client(client_fd,client_id,thread_id);
+// if(add_client_check!=CLIENT_OK){
+// printf("[WORKER] failed to add client: fd=%d | id=%d | result=%d\n",client_fd,client_id,add_client_check);
+// close(client_fd);
+// return NULL;
+// }
+//printf("[worker] client register: id=%d, fd=%d\n",client_id,client_fd);
 uint8_t receive_buffer[8192];
 size_t buffered_bytes = 0;
 bool protocol_error = false;

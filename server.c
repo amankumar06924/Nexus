@@ -80,6 +80,13 @@ close(client_socket);
 free(client_data);
 continue;
 }
+int add_client_check = add_client(assigned_fd,assigned_id,thread);
+if(add_client_check!=CLIENT_OK){
+fprintf(stderr,"[Server] failed to register client: fd=%d | id=%d | result=%d\n",assigned_fd,assigned_id,add_client_check);
+close(client_socket);
+free(client_data);
+continue;
+}
 //pthread_detach(thread);
 printf("[server] new clinet accepted id=%d fd=%d\n",assigned_id,assigned_fd);
 }
