@@ -118,13 +118,85 @@ printf("[worker] STATS sent: active=%lu connected=%lu closing=%lu free=%lu\n",st
 return true;
 }
 
+int reserve_client_slot(int client_fd , int client_id){
+if(client_fd<0) return CLIENT_ERR_INVALID_FD;
+if(client_id<0) return CLIENT_ERR_INVALID_ID;
+pthread_mutex_lock(&clients_lock);
+for(int i = 0;i<MAX_CLIENTS;i++){
+if(clients[i].active==1 && clients[i].client_id==client_id){
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_DUPLICATE;
+}
+}
+for(int i = 0;i<MAX_CLIENTS;i++){
+if(clients[i].active==0 && clients[i].thread_joinable==0){
+clients[i].client_fd = client_fd;
+clients[i].client_id = client_id;
+clients[i].active = 1;
+clients[i].client_state = CLIENT_RESERVED;
+clients[i].thread_joinable = 0;
+clients[i].thread_finished = 0;
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_OK;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_FULL;
+}
 
+int attach_client_thread(int client_id, pthread_t thread_id,struct data *data){
+if(data==NULL) return CLIENT_ERR_INVALID;
+if(client_id<0) return CLIENT_ERR_INVALID_ID;
+pthread_mutex_lock(&clients_lock);
+for(int i =0;i<MAX_CLIENTS;i++){
+if(clients[i].client_id==client_id && clients[i].client_state==CLIENT_RESERVED){
+clients[i].thread_id = thread_id;
+clients[i].thread_joinable = 1;
+clients[i].client_state = CLIENT_CONNECTED;
+pthread_mutex_lock(&data->start_mutex);
+data->start = 1;
+pthread_cond_signal(&data->start_cond);
+pthread_mutex_unlock(&data->start_mutex);
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_OK;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_NOT_FOUND;
+}
+int release_reserved_client_slot(int client_id){
+if(client_id<0){
+return CLIENT_ERR_INVALID_ID;
+}
+pthread_mutex_lock(&clients_lock);
+for(int i = 0;i<MAX_CLIENTS;i++){
+if(clients[i].active==1&&clients[i].client_id==client_id&&clients[i].client_state==CLIENT_RESERVED){
+clients[i].active = 0;
+clients[i].client_id = -1;
+clients[i].client_fd = -1;
+clients[i].client_state = CLIENT_FREE;
+clients[i].thread_joinable = 0;
+clients[i].thread_finished = 0;
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_OK;
+}
+}
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_NOT_FOUND;
+}
 
 void *worker(void *arg){
 struct data *data = arg;
 if(data==NULL){return NULL;}
 int client_fd = data->client_fd;
 int client_id = data->client_id;
+pthread_mutex_lock(&data->start_mutex);
+while (data->start == 0){
+pthread_cond_wait(&data->start_cond, &data->start_mutex);
+}
+pthread_mutex_unlock(&data->start_mutex);
+pthread_cond_destroy(&data->start_cond);
+pthread_mutex_destroy(&data->start_mutex);
 free(data);
 pthread_t thread_id = pthread_self();
 // int add_client_check = add_client(client_fd,client_id,thread_id);

@@ -70,23 +70,42 @@ continue;
 }
 client_data->client_fd = client_socket;
 client_data->client_id = next_client_id++;
+pthread_mutex_init(&client_data->start_mutex, NULL);
+pthread_cond_init(&client_data->start_cond, NULL);
+client_data->start = 0;
 int assigned_id = client_data->client_id;
 int assigned_fd = client_data->client_fd;
 pthread_t thread;
+int check_reserve_client_slot = reserve_client_slot(assigned_fd,assigned_id);
+if(check_reserve_client_slot!=CLIENT_OK){
+printf("[server] reserve client slot failed\n");
+close(client_socket);
+free(client_data);
+continue;
+}
 int result = pthread_create(&thread,NULL,worker,client_data);
 if(result!=0){
 fprintf(stderr,"pthread_create failed\n");
+release_reserved_client_slot(assigned_id);
+pthread_cond_destroy(&client_data->start_cond);
+pthread_mutex_destroy(&client_data->start_mutex);
 close(client_socket);
 free(client_data);
 continue;
 }
-int add_client_check = add_client(assigned_fd,assigned_id,thread);
-if(add_client_check!=CLIENT_OK){
-fprintf(stderr,"[Server] failed to register client: fd=%d | id=%d | result=%d\n",assigned_fd,assigned_id,add_client_check);
+int check_attach_client_thread =  attach_client_thread(assigned_id,thread,client_data);
+if(check_attach_client_thread!=CLIENT_OK){
 close(client_socket);
 free(client_data);
 continue;
 }
+//int add_client_check = add_client(assigned_fd,assigned_id,thread);
+//if(add_client_check!=CLIENT_OK){
+//fprintf(stderr,"[Server] failed to register client: fd=%d | id=%d | result=%d\n",assigned_fd,assigned_id,add_client_check);
+//close(client_socket);
+//free(client_data);
+//continue;
+//}
 //pthread_detach(thread);
 printf("[server] new clinet accepted id=%d fd=%d\n",assigned_id,assigned_fd);
 }

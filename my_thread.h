@@ -13,8 +13,9 @@
 #define MAX_CLIENTS 10
 
 #define CLIENT_FREE      0
-#define CLIENT_CONNECTED 1
-#define CLIENT_CLOSING   2
+#define CLIENT_RESERVED  1
+#define CLIENT_CONNECTED 2
+#define CLIENT_CLOSING   3
 
 #define CLIENT_OK             0
 #define CLIENT_ERR_FULL      -1
@@ -37,6 +38,10 @@ int thread_finished;
 struct data {
 int client_fd;
 int client_id;
+
+pthread_mutex_t start_mutex;
+pthread_cond_t start_cond;
+int start;
 };
 
 extern client clients[MAX_CLIENTS];
@@ -46,6 +51,9 @@ bool Send_all(int socket,const uint8_t *buffer,size_t len);
 int add_client(int client_fd, int client_id,pthread_t thread_id);
 int mark_thread_finished(int client_id);
 int remove_client(int client_id);
+int reserve_client_slot(int client_fd,int client_id);
+int release_reserved_client_slot(int client_id);
+int attach_client_thread(int client_id, pthread_t thread_id,struct data *data);
 void *worker(void *arg);
 int count_active_clients(void);
 int find_client(int client_id, client *out);
