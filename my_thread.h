@@ -42,6 +42,7 @@ int client_id;
 pthread_mutex_t start_mutex;
 pthread_cond_t start_cond;
 int start;
+int startup_failed;
 };
 
 extern client clients[MAX_CLIENTS];
@@ -54,6 +55,7 @@ int remove_client(int client_id);
 int reserve_client_slot(int client_fd,int client_id);
 int release_reserved_client_slot(int client_id);
 int attach_client_thread(int client_id, pthread_t thread_id,struct data *data);
+int client_manager_start_client(int client_fd, int client_id);
 void *worker(void *arg);
 int count_active_clients(void);
 int find_client(int client_id, client *out);

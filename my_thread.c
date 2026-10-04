@@ -184,15 +184,77 @@ return CLIENT_OK;
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_NOT_FOUND;
 }
-
+int client_manager_start_client(int client_fd, int client_id){
+if(client_fd < 0){
+return CLIENT_ERR_INVALID_FD;
+}
+if(client_id < 0){
+return CLIENT_ERR_INVALID_ID;
+}
+int result = reserve_client_slot(client_fd, client_id);
+if(result != CLIENT_OK){
+return result;
+}
+struct data *client_data = malloc(sizeof(struct data));
+if(client_data == NULL){
+release_reserved_client_slot(client_id);
+return CLIENT_ERR_FULL;
+}
+client_data->client_fd = client_fd;
+client_data->client_id = client_id;
+int mutex_result =pthread_mutex_init(&client_data->start_mutex, NULL);
+if (mutex_result != 0) {
+free(client_data);
+release_reserved_client_slot(client_id);
+return CLIENT_ERR_INVALID;
+}
+int cond_result =pthread_cond_init(&client_data->start_cond, NULL);
+if(cond_result != 0){
+pthread_mutex_destroy(&client_data->start_mutex);
+free(client_data);
+release_reserved_client_slot(client_id);
+return CLIENT_ERR_INVALID;
+}
+    client_data->start = 0;
+pthread_t thread;
+result = pthread_create(&thread, NULL, worker, client_data);
+if(result != 0){
+pthread_cond_destroy(&client_data->start_cond);
+pthread_mutex_destroy(&client_data->start_mutex);
+free(client_data);
+release_reserved_client_slot(client_id);
+return CLIENT_ERR_INVALID;
+}
+result = attach_client_thread(client_id,thread,client_data);
+if (result != CLIENT_OK) {
+pthread_mutex_lock(&client_data->start_mutex);
+client_data->startup_failed = 1;
+pthread_cond_signal(&client_data->start_cond);
+pthread_mutex_unlock(&client_data->start_mutex);
+int join_result  = pthread_join(thread,NULL);
+if(join_result!=0){
+fprintf(stderr,"[manager] pthread join failed during startup rollback: %s\n",strerror(join_result));
+}
+release_reserved_client_slot(client_id);
+return result;
+}
+return CLIENT_OK;
+}
 void *worker(void *arg){
 struct data *data = arg;
 if(data==NULL){return NULL;}
 int client_fd = data->client_fd;
 int client_id = data->client_id;
 pthread_mutex_lock(&data->start_mutex);
-while (data->start == 0){
+while (data->start == 0 && data->startup_failed==0){
 pthread_cond_wait(&data->start_cond, &data->start_mutex);
+}
+if(data->startup_failed){
+pthread_mutex_unlock(&data->start_mutex);
+pthread_cond_destroy(&data->start_cond);
+pthread_mutex_destroy(&data->start_mutex);
+free(data);
+return NULL;
 }
 pthread_mutex_unlock(&data->start_mutex);
 pthread_cond_destroy(&data->start_cond);
@@ -341,9 +403,18 @@ printf("[worker] mark_thread_finished\n");
 }else{
 printf("[worker] mark_thread_finished failed\n");
 }
+int validation = client_manager_validate();
+if(validation != CLIENT_OK){
+fprintf(stderr,"[worker] validation failed after thread finish: %d\n",validation);
+}
+
 result = remove_client(client_id);
 if(result!=CLIENT_OK){
 printf("[worker] failed to remove client: id=%d error=%d\n",client_id,result);
+}
+int validat = client_manager_validate();
+if(validat != CLIENT_OK){
+fprintf(stderr,"[worker] validation failed after remove: %d\n",validat);
 }
 printf("[worker] client cleaned up: id=%d fd=%d\n",client_id,client_fd);
 return NULL;
@@ -604,10 +675,18 @@ int client_manager_validate(void){
 pthread_mutex_lock(&clients_lock);
 for (int i = 0; i < MAX_CLIENTS; i++) {
 client *current = &clients[i];
+if (current->thread_finished == 1 && current->thread_joinable != 1) {
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_INVALID;
+}
 if (!current->active) {
 if (current->client_fd != -1 ||
 current->client_id != -1 ||
 current->client_state != CLIENT_FREE) {
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_INVALID;
+}
+if(current->thread_joinable!= current->thread_finished){
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_INVALID;
 }
@@ -617,9 +696,27 @@ if(current->client_fd < 0 ||current->client_id < 0) {
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_INVALID;
 }
-if(current->client_state != CLIENT_CONNECTED &&current->client_state != CLIENT_CLOSING){
+if(current->client_state!= CLIENT_RESERVED &&current->client_state != CLIENT_CONNECTED &&current->client_state != CLIENT_CLOSING){
 pthread_mutex_unlock(&clients_lock);
 return CLIENT_ERR_INVALID;
+}
+if(current->client_state==CLIENT_RESERVED){
+if(current->thread_joinable!=0 || current->thread_finished!=0){
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_INVALID;
+}
+}
+if (current->client_state == CLIENT_CONNECTED) {
+if (current->thread_joinable != 1 || current->thread_finished != 0) {
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_INVALID;
+}
+}
+if (current->client_state == CLIENT_CLOSING) {
+if(current->thread_joinable != 1){
+pthread_mutex_unlock(&clients_lock);
+return CLIENT_ERR_INVALID;
+}
 }
 for(int j = i + 1; j < MAX_CLIENTS; j++){
 client *other = &clients[j];
@@ -677,10 +774,12 @@ return disconnected;
 
 int client_manager_join_all_workers(void){
 pthread_t threads[MAX_CLIENTS];
+int slot_ids[MAX_CLIENTS];
 int thread_count = 0;
 pthread_mutex_lock(&clients_lock);
 for(int i = 0; i < MAX_CLIENTS; i++) {
 if(clients[i].thread_joinable) {threads[thread_count] = clients[i].thread_id;
+slot_ids[thread_count] = 1;
 thread_count++;
 }
 }
@@ -690,6 +789,10 @@ for(int i = 0; i < thread_count; i++) {
 int result = pthread_join(threads[i], NULL);
 if(result == 0) {
 joined_count++;
+pthread_mutex_lock(&clients_lock);
+clients[slot_ids[i]].thread_joinable = 0;
+clients[slot_ids[i]].thread_finished = 0;
+pthread_mutex_unlock(&clients_lock);
 }else{
 fprintf(stderr,"[manager] pthread_join failed: %s\n",
 strerror(result));
@@ -721,6 +824,11 @@ pthread_mutex_lock(&clients_lock);
 clients[slot_ids[i]].thread_finished = 0;
 clients[slot_ids[i]].thread_joinable = 0;
 pthread_mutex_unlock(&clients_lock);
+int validation = client_manager_validate();
+
+if(validation != CLIENT_OK){
+fprintf(stderr,"[manager] validation failed after reap: %d\n",validation);
+}
 }else{
 fprintf(stderr,"[manager] pthread_join failed: %s\n",strerror(res));
 }
