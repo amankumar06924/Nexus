@@ -38,6 +38,7 @@ start epoll
 
 learn about fcntl(), F_GETFL and F_SETFL flag for make non blocking recv()/send()
 learn what the difference between EAGAIN vs EINTER , poll() , poll structure (pollfd,POLLIN events,revent) , #include<poll.h> 
+implement multi client with poll() , learn about POLLIN,POLLOUT,POLLHUB,POLLERR.
 
 ---
 ## Makefile 
