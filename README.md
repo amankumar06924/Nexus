@@ -33,12 +33,20 @@ learn about #include<signal.h> header and volatile keywordsig_atomic_t for detai
                                                                                                                                         
 handle thread lifecycle 
 
-start epoll
+start poll
 ---
 
 learn about fcntl(), F_GETFL and F_SETFL flag for make non blocking recv()/send()
 learn what the difference between EAGAIN vs EINTER , poll() , poll structure (pollfd,POLLIN events,revent) , #include<poll.h> 
 implement multi client with poll() , learn about POLLIN,POLLOUT,POLLHUB,POLLERR.
+
+---
+
+start epoll
+---
+
+#include <sys/epoll.h>
+learn epoll_create() , epoll_ctl() , epoll_wait() 
 
 ---
 ## Makefile 
