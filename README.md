@@ -47,6 +47,7 @@ start epoll
 
 #include <sys/epoll.h>
 learn epoll_create() , epoll_ctl() , epoll_wait() 
+https://medium.com/@m-ibrahim.research/mastering-epoll-the-engine-behind-high-performance-linux-networking-85a15e6bde90
 
 ---
 ## Makefile 
