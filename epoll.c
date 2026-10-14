@@ -20,13 +20,20 @@
 #define BUFFER_SIZE 4096
 
 static volatile sig_atomic_t running = 1;
-
+enum client_state{
+CLIENT_FREE,
+CLIENT_ACTIVE,
+CLIENT_CLOSING
+};
 struct client{
 int fd;
 char output[BUFFER_SIZE];
 size_t output_len;
 size_t output_sent;
+enum client_state state;
+int peer_eof;
 };
+
 static void handle_sigint(int signal_number){
 (void)signal_number;
 running = 0;
@@ -81,20 +88,25 @@ event.data.fd = fd;
 return epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
 }
 static void remove_client(int epoll_fd, struct client *clients,int client_index){
+if(clients[client_index].state==CLIENT_FREE){
+return;
+}
 int fd = clients[client_index].fd;
 if(fd == -1){
 return;
 }
+clients[client_index].state = CLIENT_CLOSING;
 (void)epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
 close(fd);
 printf("[server] client disconnected fd=%d\n", fd);
 clients[client_index].fd = -1;
 clients[client_index].output_len = 0;
 clients[client_index].output_sent = 0;
+clients[client_index].state = CLIENT_FREE;
 }
 static int find_client(struct client *clients, int fd){
 for(int i = 0; i < MAX_CLIENTS; i++){
-if(clients[i].fd == fd){
+if(clients[i].fd == fd && clients[i].state==CLIENT_ACTIVE){
 return i;
 }
 }
@@ -144,6 +156,7 @@ continue;
 clients[slot].fd = client_fd;
 clients[slot].output_len = 0;
 clients[slot].output_sent = 0;
+clients[slot].state = CLIENT_ACTIVE;
 printf("[server] client connected fd=%d\n", client_fd);
 }
 }
@@ -242,7 +255,8 @@ for (int i = 0; i < MAX_CLIENTS; i++){
 clients[i].fd = -1;
 clients[i].output_len = 0;
 clients[i].output_sent = 0;
-  }
+clients[i].state = CLIENT_FREE;
+}
 struct epoll_event ready_events[MAX_EVENTS];
 printf("[server] Nexus epoll server listening on port %d\n", PORT);
 printf("[server] press Ctrl+C to stop\n");
