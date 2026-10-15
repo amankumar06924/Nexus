@@ -157,6 +157,7 @@ clients[slot].fd = client_fd;
 clients[slot].output_len = 0;
 clients[slot].output_sent = 0;
 clients[slot].state = CLIENT_ACTIVE;
+clients[slot].peer_eof = 0;
 printf("[server] client connected fd=%d\n", client_fd);
 }
 }
@@ -173,7 +174,7 @@ memcpy(client->output, buffer, (size_t)bytes);
 client->output_len = (size_t)bytes;
 client->output_sent = 0;
 struct epoll_event event = {0};
-event.events = EPOLLIN | EPOLLOUT;
+event.events = EPOLLOUT;
 event.data.fd = client->fd;
 if(epoll_ctl(epoll_fd, EPOLL_CTL_MOD,client->fd, &event) == -1){
 perror("epoll_ctl MOD client");
@@ -182,7 +183,9 @@ return -1;
 return 0;
 }
 if(bytes == 0){
-return -1;
+client->peer_eof = 1;
+if(client->output_len == client->output_sent) return -1;
+return 0;
 }
 if(errno == EINTR){
 continue;
@@ -216,6 +219,7 @@ return -1;
 }
 client->output_len = 0;
 client->output_sent = 0;
+if(client->peer_eof) return -1;
 struct epoll_event event = {0};
 event.events = EPOLLIN;
 event.data.fd = client->fd;
@@ -256,6 +260,7 @@ clients[i].fd = -1;
 clients[i].output_len = 0;
 clients[i].output_sent = 0;
 clients[i].state = CLIENT_FREE;
+clients[i].peer_eof = 0;
 }
 struct epoll_event ready_events[MAX_EVENTS];
 printf("[server] Nexus epoll server listening on port %d\n", PORT);
