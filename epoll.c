@@ -148,7 +148,7 @@ printf("[server] client limit reached; rejecting fd=%d\n",client_fd);
 close(client_fd);
 continue;
 }
-if(register_fd(epoll_fd, client_fd, EPOLLIN) == -1){
+if(register_fd(epoll_fd, client_fd, EPOLLIN | EPOLLRDHUP ) == -1){
 perror("epoll_ctl ADD client");
 close(client_fd);
 continue;
@@ -164,12 +164,10 @@ printf("[server] client connected fd=%d\n", client_fd);
 static int handle_client_read(int epoll_fd, struct client *clients,int slot){
 struct client *client = &clients[slot];
 char buffer[BUFFER_SIZE];
+if(client->output_len != client->output_sent) return 0;
 for (;;){
-size_t bytes = recv(client->fd, buffer, sizeof(buffer), 0);
+ssize_t bytes = recv(client->fd, buffer, sizeof(buffer), 0);
 if(bytes > 0){
-if(client->output_len != client->output_sent){
-return 0;
-}
 memcpy(client->output, buffer, (size_t)bytes);
 client->output_len = (size_t)bytes;
 client->output_sent = 0;
@@ -209,6 +207,7 @@ if (bytes == -1 && errno == EINTR){
 continue;
 }
 if(bytes == -1 &&(errno == EAGAIN || errno == EWOULDBLOCK)){
+fprintf(stderr,"[backpressure] send would block: fd=%d pending=%zu\n",client->fd,client->output_len - client->output_sent);
 return 0;
 }
 if(bytes == 0){
@@ -221,7 +220,7 @@ client->output_len = 0;
 client->output_sent = 0;
 if(client->peer_eof) return -1;
 struct epoll_event event = {0};
-event.events = EPOLLIN;
+event.events = EPOLLIN | EPOLLRDHUP;
 event.data.fd = client->fd;
 if(epoll_ctl(epoll_fd, EPOLL_CTL_MOD,client->fd, &event) == -1){
 perror("epoll_ctl MOD client");
@@ -290,17 +289,18 @@ if(flags & EPOLLERR){
 int socket_error = 0;
 socklen_t error_len = sizeof(socket_error);
 if (getsockopt(fd, SOL_SOCKET, SO_ERROR,&socket_error, &error_len) == -1){
+failed = 1;
 perror("getsockopt SO_ERROR");
 }
 else if (socket_error != 0){
+failed = 1;
 fprintf(stderr, "[server] socket error fd=%d: %s\n",fd, strerror(socket_error));
 }
-failed = 1;
 }
-if(flags & EPOLLHUP){
-failed = 1;
-}
-if(!failed && (flags & EPOLLIN)){
+//if(flags & EPOLLHUP){
+//failed = 1;
+//}
+if(!failed && (flags & (EPOLLIN | EPOLLRDHUP | EPOLLHUP))){
 if(handle_client_read(epoll_fd, clients, slot) == -1){
 failed = 1;
 }
