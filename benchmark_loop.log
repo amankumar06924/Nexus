@@ -1,0 +1,28 @@
+=== Nexus RTT Benchmark ===
+Target:          127.0.0.1:9009
+Payload:         64 bytes
+Warm-up rounds:  1,000
+Measured rounds: 20,000
+
+Running warm-up...
+Running measured benchmark...
+Progress: 2,000/20,000
+Progress: 4,000/20,000
+Progress: 6,000/20,000
+Progress: 8,000/20,000
+Progress: 10,000/20,000
+Progress: 12,000/20,000
+Progress: 14,000/20,000
+Progress: 16,000/20,000
+Progress: 18,000/20,000
+Progress: 20,000/20,000
+
+=== Results ===
+Successful requests: 20,000
+Payload per request: 64 bytes
+Total measured time:  0.304 seconds
+Average RTT:          14.44 us
+P50 RTT:              12.81 us
+P95 RTT:              16.40 us
+P99 RTT:              44.31 us
+Request-response rate: 65,774.02 round trips/sec
