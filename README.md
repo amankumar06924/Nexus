@@ -65,6 +65,6 @@ Force everything to rebuild:- make -B
 ## For Run
 make
 
-./sever
+./server
 
 ./client
